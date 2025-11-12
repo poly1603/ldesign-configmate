@@ -1,0 +1,10 @@
+{
+  "app": {
+    "name": "JSON Config App",
+    "version": "1.0.0"
+  },
+  "server": {
+    "host": "localhost",
+    "port": 3000
+  }
+}

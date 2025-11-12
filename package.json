@@ -1,24 +1,65 @@
 {
   "name": "@ldesign/configmate",
-  "version": "0.1.0",
-  "description": "Configuration management tool for ldesign projects",
+  "version": "1.0.0",
+  "description": "A powerful Node.js configuration management package with jiti support, multi-environment handling, and real-time change monitoring",
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "example": "tsx examples/usage.ts"
   },
   "keywords": [
     "config",
     "configuration",
+    "environment",
+    "jiti",
+    "typescript",
+    "yaml",
+    "json",
+    "watch",
+    "monitor",
     "ldesign"
   ],
-  "author": "",
+  "author": "LDesign Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ldesign/configmate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ldesign/configmate/issues"
+  },
+  "homepage": "https://github.com/ldesign/configmate#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "devDependencies": {
-    "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "@types/deep-diff": "^1.0.5",
+    "@types/js-yaml": "^4.0.9",
+    "@types/lodash.get": "^4.4.9",
+    "@types/lodash.merge": "^4.6.9",
+    "@types/lodash.set": "^4.3.9",
+    "@types/node": "^24.10.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.1"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "deep-diff": "^1.0.2",
+    "eventemitter3": "^5.0.1",
+    "jiti": "^2.6.1",
+    "js-yaml": "^4.1.0",
+    "lodash.get": "^4.4.2",
+    "lodash.merge": "^4.6.2",
+    "lodash.set": "^4.3.2"
   }
 }
