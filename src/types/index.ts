@@ -85,12 +85,12 @@ export interface ConfigEvents {
   'reload': () => void;
 }
 
-export interface IConfigManager extends EventEmitter<ConfigEvents> {
+export interface IConfigManager<T = any> extends EventEmitter<ConfigEvents> {
   /** Get the current configuration */
-  get<T = any>(path?: string, defaultValue?: T): T;
+  get<U = any>(path?: string, defaultValue?: U): U;
   
   /** Set a configuration value */
-  set(path: string, value: any): void;
+  set(path: string, value: T): void;
   
   /** Check if a configuration path exists */
   has(path: string): boolean;

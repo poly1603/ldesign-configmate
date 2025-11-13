@@ -1,6 +1,6 @@
 {
   "name": "@ldesign/configmate",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A powerful Node.js configuration management package with jiti support, multi-environment handling, and real-time change monitoring",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -14,10 +14,15 @@
     "dev": "tsup --watch",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "example": "tsx examples/usage.ts",
     "example:advanced": "tsx examples/advanced-usage.ts",
-    "example:schema": "tsx examples/schema-validation.ts"
+    "example:enhanced": "tsx examples/enhanced-usage.ts",
+    "example:schema": "tsx examples/schema-validation.ts",
+    "benchmark": "tsx benchmarks/performance.benchmark.ts",
+    "lint": "eslint src --ext .ts",
+    "prepublishOnly": "npm run build && npm run test:run"
   },
   "keywords": [
     "config",
@@ -60,10 +65,7 @@
     "deep-diff": "^1.0.2",
     "eventemitter3": "^5.0.1",
     "jiti": "^2.6.1",
-    "js-yaml": "^4.1.0",
-    "lodash.get": "^4.4.2",
-    "lodash.merge": "^4.6.2",
-    "lodash.set": "^4.3.2",
-    "zod": "^4.1.12"
+    "js-yaml": "^4.1.1",
+    "zod": "^3.23.8"
   }
 }

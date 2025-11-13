@@ -15,12 +15,14 @@ A powerful Node.js configuration management package with jiti support, multi-env
 📦 **Zero Config**: Works out of the box with sensible defaults
 
 ### New Features 🎉
+🎯 **Type Safety**: Full generic TypeScript support with `ConfigManager<T>`  
+🛡️ **Security Enhanced**: Removed unsafe lodash dependencies, prototype pollution protection  
 🌐 **Environment Variable Resolution**: Use `${VAR}` or `${VAR:default}` syntax in configs  
-💾 **Configuration Caching**: LRU cache with TTL for improved performance  
+💾 **Enhanced Caching**: Advanced LRU cache with memory management and statistics  
 📸 **Snapshots & Rollback**: Create snapshots and rollback to previous states  
 ⏱️ **Debounced File Watching**: Batch rapid changes to prevent reload storms  
-🚨 **Enhanced Error Handling**: Custom error classes with detailed context  
-🔄 **Improved Deep Clone**: Reliable cloning with structuredClone + fallbacks
+🚨 **Error Recovery**: Retry mechanisms, circuit breakers, and graceful degradation  
+🔄 **Safe Object Operations**: Secure alternatives to lodash with pollution prevention
 
 > 📚 See [FEATURES.md](./FEATURES.md) for detailed documentation of new features
 
@@ -58,19 +60,32 @@ export default defineConfig({
 });
 ```
 
-### 2. Load and use the config
+### 2. Load and use the config (Type-Safe!)
 
 ```typescript
 import { createConfig } from '@ldesign/configmate';
 
-const config = await createConfig({
+// Define your configuration interface for type safety
+interface AppConfig {
+  server: {
+    port: number;
+    host: string;
+  };
+  database: {
+    host: string;
+    port: number;
+  };
+}
+
+const config = await createConfig<AppConfig>({
   dir: './config',
   name: 'config',
   env: process.env.NODE_ENV || 'development',
 });
 
-console.log(config.get('server.port')); // 3000
-console.log(config.get('database.host')); // localhost
+// Now with full type safety and IntelliSense!
+const port: number = config.get('server.port'); // 3000
+const dbHost: string = config.get('database.host'); // localhost
 ```
 
 ### 3. Using Environment Variables (New!)
@@ -117,6 +132,51 @@ config.set('server.port', 9000);
 
 // Rollback if needed
 config.rollback('before-update');
+```
+
+### 5. Enhanced Error Recovery (New!)
+
+```typescript
+import { ConfigRecoveryManager, RetryManager, CircuitBreaker } from '@ldesign/configmate';
+
+// Create recovery manager with circuit breaker
+const recoveryManager = new ConfigRecoveryManager({
+  failureThreshold: 3,
+  resetTimeout: 30000
+});
+
+// Load config with automatic retry and fallback
+const config = await recoveryManager.loadConfigWithRecovery(
+  () => loadConfigFromRemote(),
+  { maxAttempts: 3, delay: 1000, backoffMultiplier: 2 }
+);
+
+// Use retry manager for individual operations
+const retryManager = new RetryManager();
+const result = await retryManager.execute(
+  () => riskyOperation(),
+  { maxAttempts: 3 }
+);
+```
+
+### 6. Enhanced Caching (New!)
+
+```typescript
+import { EnhancedCache } from '@ldesign/configmate';
+
+const cache = new EnhancedCache({
+  maxSize: 1000,
+  ttl: 300000, // 5 minutes
+  maxMemory: 50 * 1024 * 1024, // 50MB
+  onEvict: (key, entry) => {
+    console.log(`Evicted ${key} after ${entry.accessCount} accesses`);
+  }
+});
+
+// Get cache statistics
+const stats = cache.getStats();
+console.log(`Hit rate: ${stats.hitRate * 100}%`);
+console.log(`Memory usage: ${stats.memoryUsage} bytes`);
 ```
 
 ## API Reference

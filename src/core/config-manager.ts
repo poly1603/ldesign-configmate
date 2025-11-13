@@ -2,9 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { EventEmitter } from 'eventemitter3';
 import { watch, FSWatcher } from 'chokidar';
-import merge from 'lodash.merge';
-import get from 'lodash.get';
-import set from 'lodash.set';
+import { mergeDeep, getPath, setPath, hasPath, deletePath } from '../utils/object-utils';
 import { 
   ConfigOptions, 
   ConfigFile, 
@@ -20,8 +18,8 @@ import { SnapshotManager, Snapshot } from '../utils/snapshot';
 import { debounce, cloneDeep } from '../utils/cache';
 import { ValidationError } from '../errors';
 
-export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfigManager {
-  private config: any = {};
+export class ConfigManager<T = any> extends EventEmitter<ConfigEvents> implements IConfigManager<T> {
+  private config: T = {} as T;
   private files: ConfigFile[] = [];
   private options: Required<ConfigOptions>;
   private loader: ConfigLoader;
@@ -240,17 +238,17 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
     }
 
     // Deep merge
-    return merge({}, target, source);
+    return mergeDeep({}, target, source);
   }
 
   /**
    * Get configuration value
    */
-  get<T = any>(path?: string, defaultValue?: T): T {
+  get<U = any>(path?: string, defaultValue?: U): U {
     if (!path) {
-      return this.config as T;
+      return this.config as unknown as U;
     }
-    return get(this.config, path, defaultValue) as T;
+    return getPath(this.config, path, defaultValue) as U;
   }
 
   /**
@@ -258,7 +256,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
    */
   set(path: string, value: any): void {
     const oldValue = this.get(path);
-    set(this.config, path, value);
+    this.config = setPath(this.config, path, value) as T;
     
     // Emit change event
     const change: ConfigChange = {
@@ -277,7 +275,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
    * Check if configuration path exists
    */
   has(path: string): boolean {
-    return get(this.config, path) !== undefined;
+    return hasPath(this.config, path);
   }
 
   /**
@@ -287,24 +285,18 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
     const oldValue = this.get(path);
     
     if (oldValue !== undefined) {
-      const parts = path.split('.');
-      const lastKey = parts.pop()!;
-      const parent = parts.length > 0 ? get(this.config, parts.join('.')) : this.config;
+      this.config = deletePath(this.config, path) as T;
       
-      if (parent && typeof parent === 'object') {
-        delete parent[lastKey];
-        
-        // Emit change event
-        const change: ConfigChange = {
-          type: 'deleted',
-          path,
-          oldValue,
-          file: 'runtime',
-          timestamp: new Date(),
-        };
-        
-        this.emit('change', [change]);
-      }
+      // Emit change event
+      const change: ConfigChange = {
+        type: 'deleted',
+        path,
+        oldValue,
+        file: 'runtime',
+        timestamp: new Date(),
+      };
+      
+      this.emit('change', [change]);
     }
   }
 
@@ -593,7 +585,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
   destroy(): void {
     this.stopWatching();
     this.removeAllListeners();
-    this.config = {};
+    this.config = {} as T;
     this.files = [];
     this.fileContents.clear();
     this.clearCache();
