@@ -21,6 +21,26 @@ export interface ConfigOptions {
   defaults?: any;
   /** Schema validation function */
   validate?: (config: any) => boolean | void;
+  /** Enable environment variable resolution */
+  resolveEnv?: boolean;
+  /** Environment variable resolution options */
+  envResolver?: {
+    strict?: boolean;
+    prefix?: string;
+    warn?: boolean;
+  };
+  /** Enable configuration caching */
+  cache?: boolean;
+  /** Cache TTL in milliseconds */
+  cacheTTL?: number;
+  /** File change debounce delay in milliseconds */
+  debounceDelay?: number;
+  /** Enable automatic snapshots on changes */
+  autoSnapshot?: boolean;
+  /** Maximum number of snapshots to keep */
+  maxSnapshots?: number;
+  /** Schema validator (e.g., Zod schema) */
+  schema?: any;
 }
 
 export interface ConfigChange {
@@ -101,6 +121,18 @@ export interface IConfigManager extends EventEmitter<ConfigEvents> {
   
   /** Validate configuration */
   validate(): boolean;
+  
+  /** Create a snapshot of current configuration */
+  snapshot(id: string, description?: string): any;
+  
+  /** Rollback to a snapshot */
+  rollback(id: string): void;
+  
+  /** List all snapshots */
+  listSnapshots(): string[];
+  
+  /** Clear cache */
+  clearCache(): void;
 }
 
 export interface SaveOptions {

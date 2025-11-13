@@ -15,6 +15,10 @@ import {
 } from '../types';
 import { ConfigLoader } from '../loaders/config-loader';
 import { ChangeDetector } from '../detectors/change-detector';
+import { EnvResolver } from '../utils/env-resolver';
+import { SnapshotManager, Snapshot } from '../utils/snapshot';
+import { debounce, cloneDeep } from '../utils/cache';
+import { ValidationError } from '../errors';
 
 export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfigManager {
   private config: any = {};
@@ -25,6 +29,9 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
   private watcher?: FSWatcher;
   private fileContents: Map<string, any> = new Map();
   private isLoading = false;
+  private envResolver?: EnvResolver;
+  private snapshotManager?: SnapshotManager;
+  private debouncedReload?: () => void;
 
   constructor(options: ConfigOptions = {}) {
     super();
@@ -40,18 +47,49 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
       mergeStrategy: options.mergeStrategy || 'deep',
       defaults: options.defaults || {},
       validate: options.validate || (() => true),
-    };
+      resolveEnv: options.resolveEnv ?? true,
+      envResolver: options.envResolver || {},
+      cache: options.cache ?? true,
+      cacheTTL: options.cacheTTL || 60000,
+      debounceDelay: options.debounceDelay || 300,
+      autoSnapshot: options.autoSnapshot ?? false,
+      maxSnapshots: options.maxSnapshots || 50,
+      schema: options.schema,
+    } as Required<ConfigOptions>;
 
     // Override env from environment variable if specified
     if (this.options.envKey && process.env[this.options.envKey]) {
       this.options.env = process.env[this.options.envKey]!;
     }
 
-    this.loader = new ConfigLoader(this.options.dir);
+    // Initialize loader with cache option
+    this.loader = new ConfigLoader(
+      this.options.dir,
+      this.options.cache,
+      this.options.cacheTTL
+    );
     this.detector = new ChangeDetector();
 
+    // Initialize environment resolver
+    if (this.options.resolveEnv) {
+      this.envResolver = new EnvResolver(this.options.envResolver);
+    }
+
+    // Initialize snapshot manager
+    if (this.options.autoSnapshot) {
+      this.snapshotManager = new SnapshotManager(this.options.maxSnapshots);
+    }
+
+    // Create debounced reload function
+    if (this.options.debounceDelay > 0) {
+      this.debouncedReload = debounce(
+        this.reload.bind(this),
+        this.options.debounceDelay
+      );
+    }
+
     // Start with defaults
-    this.config = this.cloneDeep(this.options.defaults);
+    this.config = cloneDeep(this.options.defaults);
   }
 
   /**
@@ -89,7 +127,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
       }
 
       // Start with defaults
-      let newConfig = this.cloneDeep(this.options.defaults);
+      let newConfig = cloneDeep(this.options.defaults);
 
       // Load and merge base configs first
       const baseFiles = this.files.filter(f => !f.isEnvFile);
@@ -118,7 +156,16 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
       // Validate the new configuration
       const validationResult = this.options.validate(newConfig);
       if (validationResult === false) {
-        throw new Error('Configuration validation failed');
+        throw new ValidationError('Configuration validation failed');
+      }
+      
+      // Create snapshot if auto-snapshot is enabled
+      if (this.snapshotManager && this.config && Object.keys(this.config).length > 0) {
+        this.snapshotManager.create(
+          `auto-${Date.now()}`,
+          this.config,
+          'Auto-snapshot before reload'
+        );
       }
 
       // Detect changes
@@ -154,21 +201,30 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
       return content;
     }
 
+    let parsed: any;
+    
     // Check if this is a defineConfig result
     if (content.__isConfigObject) {
       const base = content.config || {};
       const envOverrides = content.env?.[this.options.env] || {};
-      return this.mergeConfig(base, envOverrides);
+      parsed = this.mergeConfig(base, envOverrides);
     }
-
     // Check for env property in regular config
-    if (content.env && typeof content.env === 'object') {
+    else if (content.env && typeof content.env === 'object') {
       const { env, ...base } = content;
       const envOverrides = env[this.options.env] || {};
-      return this.mergeConfig(base, envOverrides);
+      parsed = this.mergeConfig(base, envOverrides);
+    }
+    else {
+      parsed = content;
     }
 
-    return content;
+    // Resolve environment variables
+    if (this.envResolver) {
+      parsed = this.envResolver.resolve(parsed);
+    }
+
+    return parsed;
   }
 
   /**
@@ -326,7 +382,11 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
     });
 
     this.watcher.on('change', async (filePath) => {
-      await this.handleFileChange(filePath);
+      if (this.debouncedReload) {
+        this.debouncedReload();
+      } else {
+        await this.handleFileChange(filePath);
+      }
     });
 
     this.watcher.on('add', async (filePath) => {
@@ -438,7 +498,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
    * Export configuration as JSON
    */
   toJSON(): any {
-    return this.cloneDeep(this.config);
+    return cloneDeep(this.config);
   }
 
   /**
@@ -449,11 +509,82 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
     return result !== false;
   }
 
+
   /**
-   * Deep clone an object
+   * Create a snapshot of current configuration
    */
-  private cloneDeep(obj: any): any {
-    return JSON.parse(JSON.stringify(obj));
+  snapshot(id: string, description?: string): Snapshot | undefined {
+    if (!this.snapshotManager) {
+      this.snapshotManager = new SnapshotManager(this.options.maxSnapshots);
+    }
+    return this.snapshotManager.create(id, this.config, description);
+  }
+
+  /**
+   * Rollback to a snapshot
+   */
+  rollback(id: string): void {
+    if (!this.snapshotManager) {
+      throw new Error('Snapshot manager is not initialized');
+    }
+
+    const snapshot = this.snapshotManager.get(id);
+    if (!snapshot) {
+      throw new Error(`Snapshot '${id}' not found`);
+    }
+
+    const oldConfig = this.config;
+    this.config = cloneDeep(snapshot.config);
+
+    // Detect and emit changes
+    const changes = this.detector.detectChanges(
+      oldConfig,
+      this.config,
+      'rollback',
+      this.options.env
+    );
+
+    if (changes.length > 0) {
+      this.emit('change', changes);
+    }
+  }
+
+  /**
+   * List all snapshots
+   */
+  listSnapshots(): string[] {
+    if (!this.snapshotManager) {
+      return [];
+    }
+    return this.snapshotManager.list();
+  }
+
+  /**
+   * Get snapshot details
+   */
+  getSnapshot(id: string): Snapshot | undefined {
+    return this.snapshotManager?.get(id);
+  }
+
+  /**
+   * Delete a snapshot
+   */
+  deleteSnapshot(id: string): boolean {
+    return this.snapshotManager?.delete(id) ?? false;
+  }
+
+  /**
+   * Clear cache
+   */
+  clearCache(): void {
+    this.loader.clearCache();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; keys: string[] } {
+    return this.loader.getCacheStats();
   }
 
   /**
@@ -465,5 +596,7 @@ export class ConfigManager extends EventEmitter<ConfigEvents> implements IConfig
     this.config = {};
     this.files = [];
     this.fileContents.clear();
+    this.clearCache();
+    this.snapshotManager?.clear();
   }
 }

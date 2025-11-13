@@ -9,6 +9,22 @@ export {
   type Config,
 } from './helpers/define-config';
 
+// Export new utilities
+export { EnvResolver, type EnvResolverOptions } from './utils/env-resolver';
+export { SnapshotManager, type Snapshot } from './utils/snapshot';
+export { Cache, debounce, throttle, cloneDeep } from './utils/cache';
+export { SchemaValidator, createValidator, validateWithZod } from './utils/schema-validator';
+
+// Export errors
+export {
+  ConfigError,
+  ValidationError,
+  LoaderError,
+  WatcherError,
+  EnvResolutionError,
+  SchemaValidationError,
+} from './errors';
+
 export type {
   ConfigOptions,
   ConfigFormat,

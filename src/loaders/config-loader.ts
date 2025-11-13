@@ -3,18 +3,30 @@ import * as fs from 'fs';
 import { createJiti } from 'jiti';
 import * as yaml from 'js-yaml';
 import { ConfigFormat, ConfigFile } from '../types';
+import { Cache } from '../utils/cache';
+import { LoaderError } from '../errors';
 
 export class ConfigLoader {
   private jiti: any;
   private supportedFormats: ConfigFormat[] = [
     'ts', 'js', 'mjs', 'cjs', 'json', 'yaml', 'yml', 'toml', 'ini'
   ];
+  private cache?: Cache<string, any>;
+  private fileStats: Map<string, number> = new Map(); // Track file modification times
 
-  constructor(private baseDir: string = process.cwd()) {
+  constructor(
+    private baseDir: string = process.cwd(),
+    enableCache: boolean = false,
+    cacheTTL: number = 60000
+  ) {
     this.jiti = createJiti(this.baseDir, {
       interopDefault: true,
       requireCache: false,
     });
+    
+    if (enableCache) {
+      this.cache = new Cache(100, cacheTTL);
+    }
   }
 
   /**
@@ -22,34 +34,69 @@ export class ConfigLoader {
    */
   async loadFile(filePath: string): Promise<any> {
     if (!fs.existsSync(filePath)) {
-      throw new Error(`Config file not found: ${filePath}`);
+      throw new LoaderError(
+        `Config file not found: ${filePath}`,
+        filePath
+      );
+    }
+
+    // Check cache first
+    if (this.cache) {
+      const stats = fs.statSync(filePath);
+      const mtime = stats.mtimeMs;
+      const cachedMtime = this.fileStats.get(filePath);
+      
+      // Use cache if file hasn't been modified
+      if (cachedMtime === mtime && this.cache.has(filePath)) {
+        return this.cache.get(filePath);
+      }
+      
+      // Update file modification time
+      this.fileStats.set(filePath, mtime);
     }
 
     const ext = path.extname(filePath).slice(1).toLowerCase() as ConfigFormat;
     
+    let result: any;
     switch (ext) {
       case 'ts':
       case 'js':
       case 'mjs':
       case 'cjs':
-        return this.loadJavaScript(filePath);
+        result = this.loadJavaScript(filePath);
+        break;
       
       case 'json':
-        return this.loadJSON(filePath);
+        result = this.loadJSON(filePath);
+        break;
       
       case 'yaml':
       case 'yml':
-        return this.loadYAML(filePath);
+        result = this.loadYAML(filePath);
+        break;
       
       case 'toml':
-        return this.loadTOML(filePath);
+        result = await this.loadTOML(filePath);
+        break;
       
       case 'ini':
-        return this.loadINI(filePath);
+        result = await this.loadINI(filePath);
+        break;
       
       default:
-        throw new Error(`Unsupported file format: ${ext}`);
+        throw new LoaderError(
+          `Unsupported file format: ${ext}`,
+          filePath,
+          ext
+        );
     }
+    
+    // Cache the result
+    if (this.cache) {
+      this.cache.set(filePath, result);
+    }
+    
+    return result;
   }
 
   /**
@@ -230,5 +277,28 @@ export class ConfigLoader {
     }
     
     fs.writeFileSync(filePath, output, 'utf-8');
+  }
+  
+  /**
+   * Clear the cache
+   */
+  clearCache(): void {
+    if (this.cache) {
+      this.cache.clear();
+      this.fileStats.clear();
+    }
+  }
+  
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; keys: string[] } {
+    if (!this.cache) {
+      return { size: 0, keys: [] };
+    }
+    return {
+      size: this.cache.size(),
+      keys: this.cache.keys(),
+    };
   }
 }

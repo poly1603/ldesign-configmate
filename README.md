@@ -4,6 +4,7 @@ A powerful Node.js configuration management package with jiti support, multi-env
 
 ## Features
 
+### Core Features
 ✨ **Multi-Format Support**: Load configs from TypeScript, JavaScript, JSON, YAML, and more  
 🔄 **Environment Management**: Automatic environment-specific configuration merging  
 👀 **File Watching**: Real-time monitoring with detailed change detection  
@@ -12,6 +13,16 @@ A powerful Node.js configuration management package with jiti support, multi-env
 ⚡ **Powered by Jiti**: Load TypeScript configs without compilation  
 🔧 **Flexible API**: Get, set, delete, and save configurations easily  
 📦 **Zero Config**: Works out of the box with sensible defaults
+
+### New Features 🎉
+🌐 **Environment Variable Resolution**: Use `${VAR}` or `${VAR:default}` syntax in configs  
+💾 **Configuration Caching**: LRU cache with TTL for improved performance  
+📸 **Snapshots & Rollback**: Create snapshots and rollback to previous states  
+⏱️ **Debounced File Watching**: Batch rapid changes to prevent reload storms  
+🚨 **Enhanced Error Handling**: Custom error classes with detailed context  
+🔄 **Improved Deep Clone**: Reliable cloning with structuredClone + fallbacks
+
+> 📚 See [FEATURES.md](./FEATURES.md) for detailed documentation of new features
 
 ## Installation
 
@@ -62,6 +73,52 @@ console.log(config.get('server.port')); // 3000
 console.log(config.get('database.host')); // localhost
 ```
 
+### 3. Using Environment Variables (New!)
+
+**config.ts**
+```typescript
+import { defineConfig } from '@ldesign/configmate';
+
+export default defineConfig({
+  database: {
+    host: '${DB_HOST:localhost}',
+    port: '${DB_PORT:5432}',
+    password: '${DB_PASSWORD}',
+  },
+  api: {
+    url: '${API_URL:http://localhost:3000}',
+  },
+});
+```
+
+**Load with environment resolution**
+```typescript
+const config = await createConfig({
+  dir: './config',
+  resolveEnv: true,  // Enable ${VAR} resolution
+});
+
+console.log(config.get('database.host')); // Uses DB_HOST or 'localhost'
+```
+
+### 4. Configuration Snapshots (New!)
+
+```typescript
+const config = await createConfig({
+  dir: './config',
+  autoSnapshot: true,
+});
+
+// Create snapshot before changes
+config.snapshot('before-update', 'Before major changes');
+
+// Make changes
+config.set('server.port', 9000);
+
+// Rollback if needed
+config.rollback('before-update');
+```
+
 ## API Reference
 
 ### `createConfig(options?)`
@@ -70,6 +127,7 @@ Create and initialize a config manager instance.
 
 ```typescript
 const config = await createConfig({
+  // Core options
   dir: './config',           // Config directory
   name: 'config',            // Config file name (without extension)
   env: 'development',        // Current environment
@@ -78,6 +136,19 @@ const config = await createConfig({
   mergeStrategy: 'deep',     // 'deep' | 'shallow' | 'replace'
   defaults: {},              // Default configuration
   validate: (cfg) => true,   // Validation function
+  
+  // New options 🎉
+  resolveEnv: true,          // Enable environment variable resolution
+  envResolver: {
+    strict: false,           // Throw error for missing variables
+    prefix: '',              // Environment variable prefix
+    warn: true,              // Warn about missing variables
+  },
+  cache: true,               // Enable configuration caching
+  cacheTTL: 60000,          // Cache TTL in milliseconds
+  debounceDelay: 300,       // File change debounce delay (ms)
+  autoSnapshot: false,      // Auto-create snapshots on changes
+  maxSnapshots: 50,         // Maximum snapshots to keep
 });
 ```
 
@@ -178,6 +249,50 @@ Export configuration as JSON.
 
 ```typescript
 const json = config.toJSON();
+```
+
+#### `snapshot(id, description?)` (New!)
+
+Create a snapshot of current configuration.
+
+```typescript
+const snapshot = config.snapshot('backup-1', 'Before major update');
+console.log(snapshot.timestamp);
+```
+
+#### `rollback(id)` (New!)
+
+Rollback to a previous snapshot.
+
+```typescript
+config.rollback('backup-1');
+```
+
+#### `listSnapshots()` (New!)
+
+Get list of all snapshot IDs.
+
+```typescript
+const snapshots = config.listSnapshots();
+console.log('Available snapshots:', snapshots);
+```
+
+#### `clearCache()` (New!)
+
+Clear the configuration cache.
+
+```typescript
+config.clearCache();
+```
+
+#### `getCacheStats()` (New!)
+
+Get cache statistics.
+
+```typescript
+const stats = config.getCacheStats();
+console.log('Cache size:', stats.size);
+console.log('Cached files:', stats.keys);
 ```
 
 ### Event Listening
