@@ -18,7 +18,7 @@ import { SnapshotManager, Snapshot } from '../utils/snapshot';
 import { debounce, cloneDeep } from '../utils/cache';
 import { ValidationError } from '../errors';
 
-export class ConfigManager<T = any> extends EventEmitter<ConfigEvents> implements IConfigManager<T> {
+export class ConfigManager<T extends object = Record<string, unknown>> extends EventEmitter<ConfigEvents> implements IConfigManager<T> {
   private config: T = {} as T;
   private files: ConfigFile[] = [];
   private options: Required<ConfigOptions>;
@@ -55,8 +55,8 @@ export class ConfigManager<T = any> extends EventEmitter<ConfigEvents> implement
       schema: options.schema,
     } as Required<ConfigOptions>;
 
-    // Override env from environment variable if specified
-    if (this.options.envKey && process.env[this.options.envKey]) {
+    // Override env from environment variable only if not explicitly provided
+    if (!options.env && this.options.envKey && process.env[this.options.envKey]) {
       this.options.env = process.env[this.options.envKey]!;
     }
 

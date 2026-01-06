@@ -1,32 +1,30 @@
 # @ldesign/configmate
 
-A powerful Node.js configuration management package with jiti support, multi-environment handling, and real-time change monitoring.
+[![npm version](https://img.shields.io/npm/v/@ldesign/configmate.svg)](https://www.npmjs.com/package/@ldesign/configmate)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-14+-green.svg)](https://nodejs.org/)
 
-## Features
+A powerful, type-safe Node.js configuration management package with jiti support, multi-environment handling, real-time change monitoring, and extensive utility functions.
+
+## ✨ Features
 
 ### Core Features
-✨ **Multi-Format Support**: Load configs from TypeScript, JavaScript, JSON, YAML, and more  
-🔄 **Environment Management**: Automatic environment-specific configuration merging  
-👀 **File Watching**: Real-time monitoring with detailed change detection  
-🎯 **Type-Safe**: Full TypeScript support with `defineConfig` helper  
-🔍 **Deep Change Detection**: Track exact field changes across environments  
-⚡ **Powered by Jiti**: Load TypeScript configs without compilation  
-🔧 **Flexible API**: Get, set, delete, and save configurations easily  
-📦 **Zero Config**: Works out of the box with sensible defaults
+- 📁 **Multi-Format Support**: Load configs from TypeScript, JavaScript, JSON, YAML, TOML, and INI
+- 🌍 **Environment Management**: Automatic environment-specific configuration merging
+- 👁️ **File Watching**: Real-time monitoring with debounced change detection
+- 🎯 **Type-Safe**: Full TypeScript support with generics and path-based type inference
+- ⚡ **Powered by Jiti**: Load TypeScript configs without compilation
+- 🔒 **Security First**: Prototype pollution protection built-in
 
-### New Features 🎉
-🎯 **Type Safety**: Full generic TypeScript support with `ConfigManager<T>`  
-🛡️ **Security Enhanced**: Removed unsafe lodash dependencies, prototype pollution protection  
-🌐 **Environment Variable Resolution**: Use `${VAR}` or `${VAR:default}` syntax in configs  
-💾 **Enhanced Caching**: Advanced LRU cache with memory management and statistics  
-📸 **Snapshots & Rollback**: Create snapshots and rollback to previous states  
-⏱️ **Debounced File Watching**: Batch rapid changes to prevent reload storms  
-🚨 **Error Recovery**: Retry mechanisms, circuit breakers, and graceful degradation  
-🔄 **Safe Object Operations**: Secure alternatives to lodash with pollution prevention
+### Advanced Features
+- 📸 **Snapshots & Rollback**: Create configuration snapshots and rollback to previous states
+- 🌐 **Environment Variables**: Resolve `${VAR}` syntax with type coercion (`${PORT:number:3000}`)
+- 💾 **Enhanced Caching**: LRU cache with memory management and statistics
+- 🛡️ **Error Recovery**: Retry mechanisms, circuit breakers, and graceful degradation
+- 🔄 **Safe Object Operations**: Secure utilities for deep merge, freeze, flatten, and more
 
-> 📚 See [FEATURES.md](./FEATURES.md) for detailed documentation of new features
-
-## Installation
+## 📦 Installation
 
 ```bash
 npm install @ldesign/configmate

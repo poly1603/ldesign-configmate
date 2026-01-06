@@ -104,7 +104,8 @@ describe('debounce', () => {
 describe('throttle', () => {
   it('should throttle function calls', async () => {
     const fn = vi.fn();
-    const throttled = throttle(fn, 100);
+    // Use leading only to match original behavior
+    const throttled = throttle(fn, 100, { leading: true, trailing: false });
 
     throttled();
     throttled();
@@ -115,6 +116,24 @@ describe('throttle', () => {
     await new Promise(resolve => setTimeout(resolve, 150));
 
     throttled();
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('should call trailing edge with trailing option', async () => {
+    const fn = vi.fn();
+    const throttled = throttle(fn, 100, { leading: true, trailing: true });
+
+    throttled();
+    throttled();
+    throttled();
+
+    // Leading call
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    // Wait for throttle to finish and trailing call
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    // Leading + trailing
     expect(fn).toHaveBeenCalledTimes(2);
   });
 });

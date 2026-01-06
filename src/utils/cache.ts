@@ -1,12 +1,45 @@
 /**
+ * Cache utilities
+ * Provides LRU cache implementation and re-exports function utilities
+ */
+
+// Re-export function utilities for backward compatibility
+export { debounce, throttle, cloneDeep, memoize, delay, retry, timeout, once, compose, pipe } from './function-utils';
+
+/**
+ * Cache entry structure
+ */
+export interface CacheEntry<V> {
+  value: V;
+  timestamp: number;
+}
+
+/**
  * Simple LRU cache implementation
+ *
+ * @typeParam K - Key type
+ * @typeParam V - Value type
+ *
+ * @example
+ * ```ts
+ * const cache = new Cache<string, object>(100, 60000);
+ * cache.set('config', { port: 3000 });
+ * const config = cache.get('config');
+ * ```
  */
 export class Cache<K, V> {
-  private cache: Map<K, { value: V; timestamp: number }>;
-  private maxSize: number;
-  private ttl: number; // Time to live in milliseconds
+  private cache: Map<K, CacheEntry<V>>;
+  private readonly maxSize: number;
+  private readonly ttl: number;
+  private hits = 0;
+  private misses = 0;
 
-  constructor(maxSize: number = 100, ttl: number = 60000) {
+  /**
+   * Create a new cache instance
+   * @param maxSize - Maximum number of entries (default: 100)
+   * @param ttl - Time to live in milliseconds (default: 60000)
+   */
+  constructor(maxSize = 100, ttl = 60000) {
     this.cache = new Map();
     this.maxSize = maxSize;
     this.ttl = ttl;
@@ -14,33 +47,44 @@ export class Cache<K, V> {
 
   /**
    * Get a value from cache
+   * @param key - Cache key
+   * @returns Cached value or undefined if not found/expired
    */
   get(key: K): V | undefined {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
+      this.misses++;
       return undefined;
     }
 
     // Check if entry has expired
     if (Date.now() - entry.timestamp > this.ttl) {
       this.cache.delete(key);
+      this.misses++;
       return undefined;
     }
 
-    // Move to end (LRU)
+    // Move to end (LRU behavior)
     this.cache.delete(key);
     this.cache.set(key, entry);
+    this.hits++;
 
     return entry.value;
   }
 
   /**
    * Set a value in cache
+   * @param key - Cache key
+   * @param value - Value to cache
    */
   set(key: K, value: V): void {
+    // Remove existing entry to update position
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
     // Remove oldest entry if cache is full
-    if (this.cache.size >= this.maxSize) {
+    else if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey !== undefined) {
         this.cache.delete(firstKey);
@@ -54,11 +98,13 @@ export class Cache<K, V> {
   }
 
   /**
-   * Check if key exists in cache
+   * Check if key exists in cache (and not expired)
+   * @param key - Cache key
+   * @returns true if key exists and is not expired
    */
   has(key: K): boolean {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return false;
     }
@@ -74,6 +120,8 @@ export class Cache<K, V> {
 
   /**
    * Delete a key from cache
+   * @param key - Cache key
+   * @returns true if key was deleted
    */
   delete(key: K): boolean {
     return this.cache.delete(key);
@@ -84,10 +132,13 @@ export class Cache<K, V> {
    */
   clear(): void {
     this.cache.clear();
+    this.hits = 0;
+    this.misses = 0;
   }
 
   /**
    * Get cache size
+   * @returns Number of entries in cache
    */
   size(): number {
     return this.cache.size;
@@ -95,121 +146,107 @@ export class Cache<K, V> {
 
   /**
    * Get all keys
+   * @returns Array of cache keys
    */
   keys(): K[] {
     return Array.from(this.cache.keys());
   }
-}
 
-/**
- * Debounce function
- */
-export function debounce<T extends (...args: any[]) => any>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout | null = null;
+  /**
+   * Get all values
+   * @returns Array of cached values
+   */
+  values(): V[] {
+    return Array.from(this.cache.values()).map((entry) => entry.value);
+  }
 
-  return function (this: any, ...args: Parameters<T>) {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
+  /**
+   * Get all entries
+   * @returns Array of [key, value] pairs
+   */
+  entries(): Array<[K, V]> {
+    return Array.from(this.cache.entries()).map(([key, entry]) => [key, entry.value]);
+  }
+
+  /**
+   * Get cache hit rate
+   * @returns Hit rate as a number between 0 and 1
+   */
+  getHitRate(): number {
+    const total = this.hits + this.misses;
+    return total > 0 ? this.hits / total : 0;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): {
+    size: number;
+    maxSize: number;
+    ttl: number;
+    hits: number;
+    misses: number;
+    hitRate: number;
+  } {
+    return {
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      ttl: this.ttl,
+      hits: this.hits,
+      misses: this.misses,
+      hitRate: this.getHitRate(),
+    };
+  }
+
+  /**
+   * Remove expired entries
+   * @returns Number of entries removed
+   */
+  cleanup(): number {
+    const now = Date.now();
+    let removed = 0;
+
+    for (const [key, entry] of this.cache) {
+      if (now - entry.timestamp > this.ttl) {
+        this.cache.delete(key);
+        removed++;
+      }
     }
 
-    timeoutId = setTimeout(() => {
-      fn.apply(this, args);
-      timeoutId = null;
-    }, delay);
-  };
-}
-
-/**
- * Deep clone using structuredClone (Node 17+) with fallback
- */
-export function cloneDeep<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
+    return removed;
   }
 
-  // Use structuredClone if available (Node 17+)
-  if (typeof structuredClone !== 'undefined') {
-    try {
-      return structuredClone(obj);
-    } catch (e) {
-      // Fall back to JSON method if structuredClone fails
+  /**
+   * Get value or set if not present
+   * @param key - Cache key
+   * @param factory - Factory function to create value if not cached
+   * @returns Cached or newly created value
+   */
+  getOrSet(key: K, factory: () => V): V {
+    const existing = this.get(key);
+    if (existing !== undefined) {
+      return existing;
     }
+
+    const value = factory();
+    this.set(key, value);
+    return value;
   }
 
-  // Fallback for older Node versions or when structuredClone fails
-  try {
-    return JSON.parse(JSON.stringify(obj));
-  } catch (e) {
-    // Last resort: manual deep clone
-    return manualDeepClone(obj);
-  }
-}
-
-/**
- * Manual deep clone implementation
- */
-function manualDeepClone<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (obj instanceof Date) {
-    return new Date(obj.getTime()) as any;
-  }
-
-  if (obj instanceof Array) {
-    return obj.map(item => manualDeepClone(item)) as any;
-  }
-
-  if (obj instanceof RegExp) {
-    return new RegExp(obj.source, obj.flags) as any;
-  }
-
-  if (obj instanceof Map) {
-    const map = new Map();
-    obj.forEach((value, key) => {
-      map.set(key, manualDeepClone(value));
-    });
-    return map as any;
-  }
-
-  if (obj instanceof Set) {
-    const set = new Set();
-    obj.forEach(value => {
-      set.add(manualDeepClone(value));
-    });
-    return set as any;
-  }
-
-  const cloned: any = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      cloned[key] = manualDeepClone((obj as any)[key]);
+  /**
+   * Async version of getOrSet
+   * @param key - Cache key
+   * @param factory - Async factory function
+   * @returns Cached or newly created value
+   */
+  async getOrSetAsync(key: K, factory: () => Promise<V>): Promise<V> {
+    const existing = this.get(key);
+    if (existing !== undefined) {
+      return existing;
     }
+
+    const value = await factory();
+    this.set(key, value);
+    return value;
   }
-
-  return cloned;
-}
-
-/**
- * Throttle function
- */
-export function throttle<T extends (...args: any[]) => any>(
-  fn: T,
-  limit: number
-): (...args: Parameters<T>) => void {
-  let inThrottle: boolean = false;
-
-  return function (this: any, ...args: Parameters<T>) {
-    if (!inThrottle) {
-      fn.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => {
-        inThrottle = false;
-      }, limit);
-    }
-  };
 }
